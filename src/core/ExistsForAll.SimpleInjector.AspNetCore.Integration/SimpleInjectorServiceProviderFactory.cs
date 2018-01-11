@@ -59,7 +59,8 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 
 			container.RegisterMvcControllers(new ApplicationBuilder(defaultServiceProvider));
 
-			container.RegisterMvcViewComponents(new ApplicationBuilder(defaultServiceProvider));
+			if (_serviceProviderFactoryOptions.InclueViewComponents)
+				container.RegisterMvcViewComponents(new ApplicationBuilder(defaultServiceProvider));
 
 			container.ConfigureAutoCrossWiring(defaultServiceProvider, Services);
 
