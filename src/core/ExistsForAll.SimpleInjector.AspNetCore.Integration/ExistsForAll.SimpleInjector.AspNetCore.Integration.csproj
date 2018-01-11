@@ -1,22 +1,18 @@
-<Project Sdk="Microsoft.NET.Sdk">
-
-	<PropertyGroup>
-		<TargetFramework>netstandard2.0</TargetFramework>
-
-		<Description>An easy to use integration for SimpleInjector with Asp.Net Core</Description>
-		<PackageLicenseUrl>http://www.apache.org/licenses/LICENSE-2.0</PackageLicenseUrl>
-		<PackageProjectUrl>https://github.com/existall/AspNet.Core.SimpleInjector.Integration</PackageProjectUrl>
-		<PackageIconUrl>https://raw.githubusercontent.com/existall/Shepherd/master/art/exitsForAll_icon.png</PackageIconUrl>
-		<RepositoryUrl>https://github.com/existall/AspNet.Core.SimpleInjector.Integration</RepositoryUrl>
-		<RepositoryType>Git</RepositoryType>
-		<PackageTags>"Asp.Net core" SimpleInjector ExistsForAll ExistAll Ioc DI Asp.Net AspNet</PackageTags>
-		<Authors>Guy Ludvig</Authors>
-		<Version>1.0.0</Version>
-	</PropertyGroup>
-
-	<ItemGroup>
-		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="2.0.0" />
-		<PackageReference Include="SimpleInjector.Integration.AspNetCore.Mvc.Core" Version="4.0.12" />
-	</ItemGroup>
-
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Description>An easy to use integration for SimpleInjector with Asp.Net Core</Description>
+    <PackageLicenseUrl>http://www.apache.org/licenses/LICENSE-2.0</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/existall/AspNet.Core.SimpleInjector.Integration</PackageProjectUrl>
+    <PackageIconUrl>https://raw.githubusercontent.com/existall/Shepherd/master/art/exitsForAll_icon.png</PackageIconUrl>
+    <RepositoryUrl>https://github.com/existall/AspNet.Core.SimpleInjector.Integration</RepositoryUrl>
+    <RepositoryType>Git</RepositoryType>
+    <PackageTags>"Asp.Net core" SimpleInjector ExistsForAll ExistAll Ioc DI Asp.Net AspNet</PackageTags>
+    <Authors>Guy Ludvig</Authors>
+    <Version>2.0.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="2.0.0" />
+    <PackageReference Include="SimpleInjector.Integration.AspNetCore.Mvc.Core" Version="4.0.12" />
+  </ItemGroup>
 </Project>

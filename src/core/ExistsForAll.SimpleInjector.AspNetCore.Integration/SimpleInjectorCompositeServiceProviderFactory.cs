@@ -11,14 +11,20 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 	internal class SimpleInjectorCompositeServiceProviderFactory : IServiceProviderFactory<Container>
 	{
 		private readonly Action<ContainerOptions> _action;
-
-		public SimpleInjectorCompositeServiceProviderFactory(Action<ContainerOptions> action)
+		private readonly Action<ServiceProviderFactoryOptions> _serviceProviderFactoryOptionsAction;
+		private readonly ServiceProviderFactoryOptions _serviceProviderFactoryOptions = new ServiceProviderFactoryOptions();
+		
+		public SimpleInjectorCompositeServiceProviderFactory(Action<ContainerOptions> action,
+			Action<ServiceProviderFactoryOptions> serviceProviderFactoryOptionsAction)
 		{
 			_action = action;
+			_serviceProviderFactoryOptionsAction = serviceProviderFactoryOptionsAction;
 		}
 
-		public SimpleInjectorCompositeServiceProviderFactory(Container container)
+		public SimpleInjectorCompositeServiceProviderFactory(Container container,
+			Action<ServiceProviderFactoryOptions> serviceProviderFactoryOptionsAction)
 		{
+			_serviceProviderFactoryOptionsAction = serviceProviderFactoryOptionsAction;
 			Container = container;
 		}
 
@@ -36,6 +42,8 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 
 		public IServiceProvider CreateServiceProvider(Container container)
 		{
+			_serviceProviderFactoryOptionsAction?.Invoke(_serviceProviderFactoryOptions);
+			
 			Services.UseSimpleInjectorAspNetRequestScoping(container);
 
 			Services.AddSingleton<IControllerActivator>(new SimpleInjectorControllerActivator(container));
@@ -44,11 +52,12 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 
 			Services.EnableSimpleInjectorCrossWiring(container);
 
-			var defaultServiceProvider = Services.BuildServiceProvider();
+			var defaultServiceProvider = Services.BuildServiceProvider(_serviceProviderFactoryOptions.ValidateScope);
 
 			container.RegisterMvcControllers(new ApplicationBuilder(defaultServiceProvider));
 
-			container.RegisterMvcViewComponents(new ApplicationBuilder(defaultServiceProvider));
+			if(_serviceProviderFactoryOptions.InclueViewComponents)
+				container.RegisterMvcViewComponents(new ApplicationBuilder(defaultServiceProvider));
 
 			var compositeServiceProvider = new CompositeServiceProvider(defaultServiceProvider, Container);
 

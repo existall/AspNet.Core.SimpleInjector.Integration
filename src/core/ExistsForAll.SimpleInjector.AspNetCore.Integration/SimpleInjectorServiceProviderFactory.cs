@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Builder.Internal;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.ViewComponents;
@@ -10,15 +11,22 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 {
 	internal class SimpleInjectorServiceProviderFactory : IServiceProviderFactory<Container>
 	{
-		private readonly Action<ContainerOptions> _action;
+		private readonly ServiceProviderFactoryOptions _serviceProviderFactoryOptions = new ServiceProviderFactoryOptions();
 
-		public SimpleInjectorServiceProviderFactory(Action<ContainerOptions> action)
+		private readonly Action<ContainerOptions> _action;
+		private readonly Action<ServiceProviderFactoryOptions> _serviceProviderFactoryOptionsAction;
+
+		public SimpleInjectorServiceProviderFactory(Action<ContainerOptions> action,
+			Action<ServiceProviderFactoryOptions> serviceProviderFactoryOptionsAction)
 		{
 			_action = action;
+			_serviceProviderFactoryOptionsAction = serviceProviderFactoryOptionsAction;
 		}
 
-		public SimpleInjectorServiceProviderFactory(Container container)
+		public SimpleInjectorServiceProviderFactory(Container container,
+			Action<ServiceProviderFactoryOptions> serviceProviderFactoryOptionsAction)
 		{
+			_serviceProviderFactoryOptionsAction = serviceProviderFactoryOptionsAction;
 			Container = container;
 		}
 
@@ -36,15 +44,18 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 
 		public IServiceProvider CreateServiceProvider(Container container)
 		{
+			_serviceProviderFactoryOptionsAction?.Invoke(_serviceProviderFactoryOptions);
+
 			Services.UseSimpleInjectorAspNetRequestScoping(container);
 
 			Services.AddSingleton<IControllerActivator>(new SimpleInjectorControllerActivator(container));
 
-			Services.AddSingleton<IViewComponentActivator>(new SimpleInjectorViewComponentActivator(container));
+			if (_serviceProviderFactoryOptions.InclueViewComponents)
+				Services.AddSingleton<IViewComponentActivator>(new SimpleInjectorViewComponentActivator(container));
 
 			Services.EnableSimpleInjectorCrossWiring(container);
 
-			var defaultServiceProvider = Services.BuildServiceProvider();
+			var defaultServiceProvider = Services.BuildServiceProvider(_serviceProviderFactoryOptions.ValidateScope);
 
 			container.RegisterMvcControllers(new ApplicationBuilder(defaultServiceProvider));
 
