@@ -26,6 +26,8 @@ namespace Test.WebApplication
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddMvc();
+            
+            
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -41,7 +43,9 @@ namespace Test.WebApplication
 
 	    public void ConfigureContainer(Container container)
 	    {
-		    
+	        //var type = typeof(IOptionsSnapshot<>);
+
+	        //container.Register(type, typeof(OptionsManager<>));
 	    }
     }
 }
