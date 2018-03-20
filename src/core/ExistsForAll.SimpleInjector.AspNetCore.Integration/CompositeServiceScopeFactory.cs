@@ -4,6 +4,36 @@ using SimpleInjector;
 
 namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 {
+	internal sealed class SimpleInjectorScopeFactory : IServiceScopeFactory
+	{
+		private readonly Container _container;
+
+		public SimpleInjectorScopeFactory(Container container)
+		{
+			_container = container;
+		}
+
+		public IServiceScope CreateScope()
+		{
+			return new SimpleInjectorServiceScope(_container.GetInstance<IServiceProvider>());
+		}
+
+		private class SimpleInjectorServiceScope : IServiceScope
+		{
+			public SimpleInjectorServiceScope(IServiceProvider serviceProvider)
+			{
+				ServiceProvider = serviceProvider;
+			}
+
+			public void Dispose()
+			{
+				
+			}
+
+			public IServiceProvider ServiceProvider { get; }
+		}
+	}
+
 	internal sealed class CompositeServiceScopeFactory : IServiceScopeFactory
 	{
 		private readonly Container _container;

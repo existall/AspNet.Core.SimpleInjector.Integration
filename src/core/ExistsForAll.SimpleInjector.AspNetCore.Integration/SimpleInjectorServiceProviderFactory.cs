@@ -5,6 +5,8 @@ using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Builder.Internal;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.ViewComponents;
 using Microsoft.Extensions.DependencyInjection;
@@ -49,15 +51,28 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 
 		public IServiceProvider CreateServiceProvider(Container container)
 		{
-			var serviceDescriptors = Services.Where(x => x.ServiceType.Name.Contains("ITele"));
+			//var serviceDescriptors = Services.Where(x => x.ServiceType.Name.Contains("ITele"));
 
 			Container.Options.ConstructorResolutionBehavior =
 				new MostResolvableParametersConstructorResolutionBehavior(Container);
 
+			Services.UseSimpleInjectorAspNetRequestScoping(container);
+
+			Container.Register<IServiceProvider>(() => new SimpleInjectorServiceProvider(Container), Lifestyle.Singleton);
+			container.Register<IServiceScopeFactory>(() => new SimpleInjectorScopeFactory(container), Lifestyle.Singleton);
+
 			RegisterServices(Services);
 
+			var defaultServiceProvider1 = Services.BuildServiceProvider(_serviceProviderFactoryOptions.ValidateScope);
+
+			var serviceDescriptors = Services.Where(x=>x.ServiceType.Name.Contains("Form"));
+
+			container.ResolveUnregisteredType += Container_ResolveUnregisteredType;
+
+			var service = defaultServiceProvider1.GetService(typeof(FormOptions));
+
 			Container.Verify();
-			
+
 
 			_serviceProviderFactoryOptionsAction?.Invoke(_serviceProviderFactoryOptions);
 
@@ -82,26 +97,65 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 			return defaultServiceProvider;
 		}
 
+		private void Container_ResolveUnregisteredType(object sender, UnregisteredTypeEventArgs e)
+		{
+			if(e.Handled)
+				return;
+
+			var serviceType = e.UnregisteredServiceType;
+
+			if (serviceType.IsGenericType && serviceType.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+			{
+				var elementType = serviceType.GetGenericArguments().Single();
+				var producer = Container.GetRegistration(elementType);
+
+				if (producer == null)
+					return;
+
+				var castMethod = typeof(Enumerable)
+					.GetMethod("Cast")
+					.MakeGenericMethod(elementType);
+
+				object stream = new[] { producer.GetInstance() }.Select(x => x);
+
+				stream = castMethod.Invoke(null, new[] { stream });
+
+				e.Register(producer.Lifestyle.CreateRegistration(serviceType, () => stream, Container));
+			}
+
+			var eUnregisteredServiceType = e.UnregisteredServiceType;
+		}
+
 		private void RegisterServices(IServiceCollection serviceCollection)
 		{
 			var list = new HashSet<Type>();
-			
+
 			var registrations = serviceCollection.Select(CreateServiceRegistration).ToArray();
-			
+
 			var groupedRegistrations = registrations.GroupBy(sr => sr.ServiceType);
-			
+
 			foreach (var groupedRegistration in groupedRegistrations)
 			{
+				if (groupedRegistration.Key.Name.Contains("IPostConfigureOptions"))
+				{
+
+				}
+
 				if (!groupedRegistration.Key.GetTypeInfo().IsGenericTypeDefinition && groupedRegistration.Count() > 1)
 				{
-					Container.RegisterCollection(groupedRegistration.Key,groupedRegistration.Select(x=>x.ServiceType));
+					Container.RegisterCollection(groupedRegistration.Key, groupedRegistration.Select(x => x.ServiceType));
 					list.Add(groupedRegistration.Key);
 				}
 			}
-			
-			
+
+
 			foreach (var registration in registrations.Where(x => !list.Contains(x.ServiceType)))
 			{
+				if (registration.ServiceType.Name.Contains("IPostConfigureOptions"))
+				{
+
+				}
+
 				registration.RegistrationMethod.Invoke();
 			}
 		}
@@ -132,7 +186,8 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 
 			//Container.AddRegistration(registration.ServiceType,reg);
 
-			registration.RegistrationMethod = () => Container.RegisterConditional(registration.ServiceType, registration.ImplementingType, registration.Lifestyle,  c => !c.Handled );
+			registration.RegistrationMethod = () => Container.RegisterConditional(registration.ServiceType,
+				registration.ImplementingType, registration.Lifestyle, c => !c.Handled);
 
 			return registration;
 		}
@@ -140,7 +195,7 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 		private ServiceRegistration CreateServiceRegistrationForInstance(ServiceDescriptor serviceDescriptor)
 		{
 			var registration = CreateBasicServiceRegistration(serviceDescriptor);
-			
+
 			registration.Value = serviceDescriptor.ImplementationInstance;
 
 			var reg = registration.Lifestyle.CreateRegistration(registration.ServiceType, () => registration.Value, Container);
@@ -213,7 +268,7 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 			this.container = container;
 		}
 
-		private bool IsCalledDuringRegistrationPhase => !this.container.IsLocked();
+		private bool IsCalledDuringRegistrationPhase => !container.IsLocked();
 
 		public ConstructorInfo GetConstructor(Type implementationType)
 		{
@@ -222,20 +277,33 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 			throw new ActivationException(BuildExceptionMessage(implementationType));
 		}
 
-		private IEnumerable<ConstructorInfo> GetConstructors(Type implementation) =>
-			from ctor in implementation.GetConstructors()
-			let parameters = ctor.GetParameters()
-			where this.IsCalledDuringRegistrationPhase
-			      || implementation.GetConstructors().Length == 1
-			      || ctor.GetParameters().All(this.CanBeResolved)
-			orderby parameters.Length descending
-			select ctor;
+		private IEnumerable<ConstructorInfo> GetConstructors(Type implementation)
+		{
+
+			if (implementation.Name.Contains("PostConfigureOptions"))
+			{
+
+			}
+
+			var t = from ctor in implementation.GetConstructors()
+				let parameters = ctor.GetParameters()
+				where IsCalledDuringRegistrationPhase || implementation.GetConstructors().Length == 1 || ctor.GetParameters().All(CanBeResolved)
+				orderby parameters.Length descending
+				select ctor;
+
+			return t;
+		}
+
 
 		private bool CanBeResolved(ParameterInfo parameter) =>
 			this.GetInstanceProducerFor(new InjectionConsumerInfo(parameter)) != null;
 
-		private InstanceProducer GetInstanceProducerFor(InjectionConsumerInfo i) =>
-			this.container.Options.DependencyInjectionBehavior.GetInstanceProducer(i, false);
+		private InstanceProducer GetInstanceProducerFor(InjectionConsumerInfo i)
+		{
+			var instanceProducer = this.container.Options.DependencyInjectionBehavior.GetInstanceProducer(i, false);
+			return instanceProducer;
+		}
+			
 
 		private static string BuildExceptionMessage(Type type) =>
 			!type.GetConstructors().Any()
@@ -252,5 +320,20 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 				"For the container to be able to create {0}, it should contain a public " +
 				"constructor that only contains parameters that can be resolved.",
 				type.ToFriendlyName());
+	}
+
+	internal class SimpleInjectorServiceProvider : IServiceProvider
+	{
+		private readonly Container _container;
+
+		public SimpleInjectorServiceProvider(Container container)
+		{
+			_container = container;
+		}
+
+		public object GetService(Type serviceType)
+		{
+			return _container.GetInstance(serviceType);
+		}
 	}
 }

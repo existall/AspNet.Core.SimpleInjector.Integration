@@ -14,6 +14,67 @@ using Xunit;
 
 namespace ExistsForAll.SimpleInjector.AspNetCore.Integration.Tests
 {
+	public class XX
+	{
+		[Fact]
+		public void XX1()
+		{
+			var x = new ServiceCollection();
+
+			x.AddSingleton<IFoo, Foo>();
+			//x.AddSingleton<IA, A>();
+			x.AddSingleton<IBar, Bar>();
+
+			var buildServiceProvider = x.BuildServiceProvider();
+
+			buildServiceProvider.GetService(typeof(IFoo));
+		}
+
+		
+	}
+
+
+
+	public interface IFoo
+	{
+
+	}
+
+	class Foo : IFoo
+	{
+		private readonly IBar _bar;
+		private readonly IA _a;
+
+		public Foo(IBar bar)
+		{
+			_bar = bar;
+		}
+
+		public Foo(IBar bar, IA a)
+		{
+			_bar = bar;
+			_a = a;
+		}
+	}
+
+	public interface IBar
+	{
+
+	}
+
+	class Bar : IBar
+	{
+	}
+
+
+
+
+
+
+
+
+
+
 	public class Test : TestFixture<Startup>
 	{
 		public Test() 
