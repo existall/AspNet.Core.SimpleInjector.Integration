@@ -52,13 +52,20 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 		public IServiceProvider CreateServiceProvider(Container container)
 		{
 			//var serviceDescriptors = Services.Where(x => x.ServiceType.Name.Contains("ITele"));
+			Services.UseSimpleInjectorAspNetRequestScoping(container);
+
+			Services.AddSingleton<IControllerActivator>(new SimpleInjectorControllerActivator(container));
+
+			Services.AddSingleton<IViewComponentActivator>(new SimpleInjectorViewComponentActivator(container));
 
 			Container.Options.ConstructorResolutionBehavior =
 				new MostResolvableParametersConstructorResolutionBehavior(Container);
 
 			Services.UseSimpleInjectorAspNetRequestScoping(container);
 
-			Container.Register<IServiceProvider>(() => new SimpleInjectorServiceProvider(Container), Lifestyle.Singleton);
+			var simpleInjectorServiceProvider = new SimpleInjectorServiceProvider(Container);
+
+			Container.Register<IServiceProvider>(() => simpleInjectorServiceProvider, Lifestyle.Singleton);
 			container.Register<IServiceScopeFactory>(() => new SimpleInjectorScopeFactory(container), Lifestyle.Singleton);
 
 			RegisterServices(Services);
@@ -69,32 +76,25 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 
 			container.ResolveUnregisteredType += Container_ResolveUnregisteredType;
 
-			var service = defaultServiceProvider1.GetService(typeof(FormOptions));
+			var service = defaultServiceProvider1.GetService(typeof(IHttpContextFactory));
 
-			Container.Verify();
+			//Container.Verify();
 
+			//if (_serviceProviderFactoryOptions.InclueViewComponents)
+				
 
-			_serviceProviderFactoryOptionsAction?.Invoke(_serviceProviderFactoryOptions);
+			//Services.EnableSimpleInjectorCrossWiring(container);
 
-			Services.UseSimpleInjectorAspNetRequestScoping(container);
+			//var defaultServiceProvider = Services.BuildServiceProvider(_serviceProviderFactoryOptions.ValidateScope);
 
-			Services.AddSingleton<IControllerActivator>(new SimpleInjectorControllerActivator(container));
+			//container.RegisterMvcControllers(new ApplicationBuilder(defaultServiceProvider));
 
-			if (_serviceProviderFactoryOptions.InclueViewComponents)
-				Services.AddSingleton<IViewComponentActivator>(new SimpleInjectorViewComponentActivator(container));
+			//if (_serviceProviderFactoryOptions.InclueViewComponents)
+//				container.RegisterMvcViewComponents(new ApplicationBuilder(defaultServiceProvider));
 
-			Services.EnableSimpleInjectorCrossWiring(container);
+			//container.ConfigureAutoCrossWiring(defaultServiceProvider, Services);
 
-			var defaultServiceProvider = Services.BuildServiceProvider(_serviceProviderFactoryOptions.ValidateScope);
-
-			container.RegisterMvcControllers(new ApplicationBuilder(defaultServiceProvider));
-
-			if (_serviceProviderFactoryOptions.InclueViewComponents)
-				container.RegisterMvcViewComponents(new ApplicationBuilder(defaultServiceProvider));
-
-			container.ConfigureAutoCrossWiring(defaultServiceProvider, Services);
-
-			return defaultServiceProvider;
+			return simpleInjectorServiceProvider;
 		}
 
 		private void Container_ResolveUnregisteredType(object sender, UnregisteredTypeEventArgs e)
@@ -241,17 +241,6 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 			}
 		}
 
-		private static Func<object> CreateFactoryDelegate(ServiceDescriptor serviceDescriptor)
-		{
-			var openGenericMethod = typeof(SimpleInjectorServiceProviderFactory)
-				.GetTypeInfo()
-				.GetDeclaredMethod("CreateTypedFactoryDelegate");
-
-			var closedGenericMethod = openGenericMethod.MakeGenericMethod(serviceDescriptor.ServiceType);
-
-			return (Func<object>) closedGenericMethod.Invoke(null, new object[] {serviceDescriptor});
-		}
-
 		private Func<object> CreateTypedFactoryDelegate(ServiceDescriptor serviceDescriptor)
 		{
 			return () => serviceDescriptor.ImplementationFactory(Container.GetInstance<IServiceProvider>());
@@ -322,8 +311,8 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 				type.ToFriendlyName());
 	}
 
-	internal class SimpleInjectorServiceProvider : IServiceProvider
-	{
+	internal class SimpleInjectorServiceProvider : IServiceProvider, ISupportRequiredService
+    {
 		private readonly Container _container;
 
 		public SimpleInjectorServiceProvider(Container container)
@@ -335,5 +324,10 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 		{
 			return _container.GetInstance(serviceType);
 		}
-	}
+
+        public object GetRequiredService(Type serviceType)
+        {
+            return _container.GetRequiredService(serviceType);
+        }
+    }
 }
