@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
@@ -30,7 +31,19 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration.Tests
 			buildServiceProvider.GetService(typeof(IFoo));
 		}
 
-		
+		[Fact]
+		public void XX2()
+		{
+			var x = new ServiceCollection();
+
+			x.AddSingleton<IXXX, Xxx>();
+			//x.AddSingleton<IA, A>();
+			//x.AddSingleton<IYY, Yy>();
+
+			var buildServiceProvider = x.BuildServiceProvider();
+
+			buildServiceProvider.GetService(typeof(IXXX));
+		}
 	}
 
 
@@ -67,12 +80,25 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration.Tests
 	}
 
 
+	public interface IXXX
+	{
+		
+	}
 
+	class Xxx : IXXX
+	{
+		public Xxx(IEnumerable<IYY> struff)
+		{
+		}
+	}
 
+	internal interface IYY
+	{
+	}
 
-
-
-
+	class Yy : IYY
+	{
+	}
 
 
 	public class Test : TestFixture<Startup>

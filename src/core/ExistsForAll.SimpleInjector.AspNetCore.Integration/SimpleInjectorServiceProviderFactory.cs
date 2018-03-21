@@ -3,15 +3,12 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
-using System.Security.Cryptography.X509Certificates;
-using Microsoft.AspNetCore.Builder.Internal;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.ViewComponents;
 using Microsoft.Extensions.DependencyInjection;
 using SimpleInjector;
 using SimpleInjector.Advanced;
+using SimpleInjector.Diagnostics;
 using SimpleInjector.Integration.AspNetCore.Mvc;
 
 namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
@@ -41,6 +38,8 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 
 		private IServiceCollection Services { get; set; }
 
+		private IServiceProvider _serviceProvider;
+		
 		public Container CreateBuilder(IServiceCollection services)
 		{
 			Container = Container ?? new Container();
@@ -51,7 +50,9 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 
 		public IServiceProvider CreateServiceProvider(Container container)
 		{
-			//var serviceDescriptors = Services.Where(x => x.ServiceType.Name.Contains("ITele"));
+			var xxx = Services.Where(x => x.ServiceType.Name.Contains("IOptionsFactory"));
+			
+			
 			Services.UseSimpleInjectorAspNetRequestScoping(container);
 
 			Services.AddSingleton<IControllerActivator>(new SimpleInjectorControllerActivator(container));
@@ -64,19 +65,17 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 			Services.UseSimpleInjectorAspNetRequestScoping(container);
 
 			var simpleInjectorServiceProvider = new SimpleInjectorServiceProvider(Container);
-
+			
 			Container.Register<IServiceProvider>(() => simpleInjectorServiceProvider, Lifestyle.Singleton);
 			container.Register<IServiceScopeFactory>(() => new SimpleInjectorScopeFactory(container), Lifestyle.Singleton);
 
 			RegisterServices(Services);
 
-			var defaultServiceProvider1 = Services.BuildServiceProvider(_serviceProviderFactoryOptions.ValidateScope);
+			_serviceProvider = Services.BuildServiceProvider(_serviceProviderFactoryOptions.ValidateScope);
 
 			var serviceDescriptors = Services.Where(x=>x.ServiceType.Name.Contains("Form"));
 
 			container.ResolveUnregisteredType += Container_ResolveUnregisteredType;
-
-			var service = defaultServiceProvider1.GetService(typeof(IHttpContextFactory));
 
 			//Container.Verify();
 
@@ -104,9 +103,24 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 
 			var serviceType = e.UnregisteredServiceType;
 
+			var service = _serviceProvider.GetService(serviceType);
+
+			var requiredService = _serviceProvider.GetRequiredService(serviceType);
+			
 			if (serviceType.IsGenericType && serviceType.GetGenericTypeDefinition() == typeof(IEnumerable<>))
 			{
 				var elementType = serviceType.GetGenericArguments().Single();
+
+				var serviceTypeFullName = serviceType.FullName;
+
+				if (serviceTypeFullName.Contains("IEnumerable") && serviceTypeFullName.Contains("IPostConfigureOptions"))
+				{
+					e.Register(Lifestyle.Transient.CreateRegistration(serviceType, () => Array.CreateInstance(elementType,0), Container));
+					return;
+				}
+				
+
+				var r = Services.LastOrDefault(x => x.ServiceType == elementType);
 				var producer = Container.GetRegistration(elementType);
 
 				if (producer == null)
@@ -136,7 +150,7 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 
 			foreach (var groupedRegistration in groupedRegistrations)
 			{
-				if (groupedRegistration.Key.Name.Contains("IPostConfigureOptions"))
+				if (groupedRegistration.Key.FullName.Contains("OptionsManager"))
 				{
 
 				}
@@ -151,7 +165,7 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 
 			foreach (var registration in registrations.Where(x => !list.Contains(x.ServiceType)))
 			{
-				if (registration.ServiceType.Name.Contains("IPostConfigureOptions"))
+				if (registration.ServiceType.Name.Contains("OptionsManager"))
 				{
 
 				}
@@ -186,9 +200,28 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 
 			//Container.AddRegistration(registration.ServiceType,reg);
 
-			registration.RegistrationMethod = () => Container.RegisterConditional(registration.ServiceType,
-				registration.ImplementingType, registration.Lifestyle, c => !c.Handled);
+			registration.RegistrationMethod = () =>
+			{
+				if (registration.ServiceType.FullName.Contains("OptionsFactory"))
+				{
+					
+				}
+				
+				Container.RegisterConditional(registration.ServiceType,
+					registration.ImplementingType, registration.Lifestyle, c => !c.Handled);
+				
+				
+				if (registration.Lifestyle == Lifestyle.Transient)
+				{
+					Container.GetRegistration(registration.ServiceType)
+						.Registration
+						.SuppressDiagnosticWarning(DiagnosticType.DisposableTransientComponent,
+							justification: "This is a cross-wired service. ASP.NET Core will ensure it gets disposed.");
+				}
+			};
 
+			
+			
 			return registration;
 		}
 
@@ -268,12 +301,6 @@ namespace ExistsForAll.SimpleInjector.AspNetCore.Integration
 
 		private IEnumerable<ConstructorInfo> GetConstructors(Type implementation)
 		{
-
-			if (implementation.Name.Contains("PostConfigureOptions"))
-			{
-
-			}
-
 			var t = from ctor in implementation.GetConstructors()
 				let parameters = ctor.GetParameters()
 				where IsCalledDuringRegistrationPhase || implementation.GetConstructors().Length == 1 || ctor.GetParameters().All(CanBeResolved)
